@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 
 export async function GET() {
+  const advertisementImageUrl = process.env.ADVERTISEMENT_IMAGE_URL || "";
+  const redirectUrl = process.env.REDIRECT_URL || "";
 
   return NextResponse.json(
     {
-      advertisementImageUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b6/Image_created_with_a_mobile_phone.png/960px-Image_created_with_a_mobile_phone.png",
+      advertisementImageUrl,
+      redirectUrl,
     },
     {
       headers: {
