@@ -4,12 +4,14 @@ export async function GET() {
   const advertisementImageUrl = process.env.ADVERTISEMENT_IMAGE_URL || "";
   const redirectUrl = process.env.REDIRECT_URL || "";
   const viewPop = process.env.VIEW_POP === "true";
+  const popIntervalHours = parseInt(process.env.POP_INTERVAL_HOURS || "0", 10);
 
   return NextResponse.json(
     {
       advertisementImageUrl,
       redirectUrl,
       viewPop,
+      popIntervalHours,
     },
     {
       headers: {
