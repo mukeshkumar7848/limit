@@ -3,17 +3,24 @@ import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_KEY!
-);
-
-// Initialize Resend client
-const resend = new Resend(process.env.RESEND_API_KEY!);
-
 export async function POST(request: NextRequest) {
   try {
+    // Initialize clients inside the function
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_KEY;
+    const resendApiKey = process.env.RESEND_API_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("Missing Supabase credentials");
+      return NextResponse.json(
+        { error: "Server configuration error" },
+        { status: 500 }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    const resend = resendApiKey ? new Resend(resendApiKey) : null;
+
     // Get the request body
     const body = await request.text();
     
@@ -67,6 +74,41 @@ export async function POST(request: NextRequest) {
         console.log("Payment captured:", paymentEntity);
         
         try {
+          // Generate license key
+          const licenseKey = `LIC-${Date.now()}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+          
+          // Calculate expiry date (1 year from now, adjust as needed)
+          const expiresAt = new Date();
+          expiresAt.setFullYear(expiresAt.getFullYear() + 1);
+
+          // Save license to Supabase
+          const { data: licenseData, error: licenseError } = await supabase
+            .from("licenses")
+            .insert({
+              license_key: licenseKey,
+              email: paymentEntity.email || null,
+              phone: paymentEntity.contact || null,
+              razorpay_payment_id: paymentEntity.id,
+              razorpay_order_id: paymentEntity.order_id,
+              amount: paymentEntity.amount / 100, // Convert paise to rupees
+              currency: paymentEntity.currency,
+              status: "active",
+              device_id: null, // Will be set when user activates
+              activations: 0,
+              max_activations: 1, // Adjust based on your license type
+              created_at: new Date().toISOString(),
+              activated_at: null,
+              expires_at: expiresAt.toISOString(),
+            })
+            .select()
+            .single();
+
+          if (licenseError) {
+            console.error("License creation error:", licenseError);
+          } else {
+            console.log("License created:", licenseData);
+          }
+
           // Save payment to Supabase
           const { data: paymentData, error: dbError } = await supabase
             .from("payments")
@@ -90,128 +132,70 @@ export async function POST(request: NextRequest) {
             console.log("Payment saved to database:", paymentData);
           }
 
-          // Generate and create license
-          const crypto = await import("crypto");
-          const licenseKey = `LIC-${crypto.randomBytes(16).toString("hex").toUpperCase()}`;
-          
-          // Determine license duration based on amount or order notes
-          // You can customize this logic based on your pricing
-          const amount = paymentEntity.amount / 100;
-          let maxActivations = 1;
-          let daysValid = 30; // default 30 days
-          
-          // Example pricing logic (customize as needed)
-          if (amount >= 999) {
-            maxActivations = 5;
-            daysValid = 365; // 1 year
-          } else if (amount >= 499) {
-            maxActivations = 3;
-            daysValid = 180; // 6 months
-          } else if (amount >= 199) {
-            maxActivations = 1;
-            daysValid = 90; // 3 months
-          }
-
-          const expiresAt = new Date();
-          expiresAt.setDate(expiresAt.getDate() + daysValid);
-
-          // Create license in database
-          const { data: licenseData, error: licenseError } = await supabase
-            .from("licenses")
-            .insert({
-              license_key: licenseKey,
-              email: paymentEntity.email,
-              phone: paymentEntity.contact,
-              razorpay_payment_id: paymentEntity.id,
-              razorpay_order_id: paymentEntity.order_id,
-              amount: paymentEntity.amount,
-              currency: paymentEntity.currency,
-              status: "active",
-              activations: 0,
-              max_activations: maxActivations,
-              created_at: new Date().toISOString(),
-              expires_at: expiresAt.toISOString(),
-            })
-            .select()
-            .single();
-
-          if (licenseError) {
-            console.error("License creation error:", licenseError);
-          } else {
-            console.log("License created:", licenseData);
-          }
-
           // Send success email with license key
-          if (paymentEntity.email) {
+          if (paymentEntity.email && licenseData && resend) {
             const { data: emailData, error: emailError } = await resend.emails.send({
               from: process.env.FROM_EMAIL || "onboarding@resend.dev",
               to: paymentEntity.email,
               subject: "Payment Successful! 🎉 Your License Key",
               html: `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                  <style>
-                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
-                    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-                    .license-box { background: white; border: 2px solid #667eea; padding: 20px; margin: 20px 0; border-radius: 8px; text-align: center; }
-                    .license-key { font-size: 18px; font-weight: bold; color: #667eea; letter-spacing: 2px; word-break: break-all; }
-                    .details { background: white; padding: 15px; margin: 20px 0; border-radius: 8px; }
-                    .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
-                    .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
-                  </style>
-                </head>
-                <body>
-                  <div class="container">
-                    <div class="header">
-                      <h1>🎉 Payment Successful!</h1>
-                      <p>Thank you for your purchase</p>
-                    </div>
-                    <div class="content">
-                      <h2>Your License Key</h2>
-                      <div class="license-box">
-                        <p style="margin: 0 0 10px 0;">License Key:</p>
-                        <div class="license-key">${licenseKey}</div>
-                      </div>
-                      
-                      <div class="details">
-                        <h3>Payment Details</h3>
-                        <p><strong>Payment ID:</strong> ${paymentEntity.id}</p>
-                        <p><strong>Amount:</strong> ${paymentEntity.currency.toUpperCase()} ${(paymentEntity.amount / 100).toFixed(2)}</p>
-                        <p><strong>Status:</strong> ${paymentEntity.status}</p>
-                        <p><strong>Method:</strong> ${paymentEntity.method}</p>
-                      </div>
-
-                      <div class="details">
-                        <h3>License Information</h3>
-                        <p><strong>Max Activations:</strong> ${maxActivations} device(s)</p>
-                        <p><strong>Valid Until:</strong> ${expiresAt.toLocaleDateString()}</p>
-                        <p><strong>Current Activations:</strong> 0</p>
-                      </div>
-
-                      <p><strong>Important:</strong> Keep this license key safe. You'll need it to activate your software.</p>
-                      
-                      <div style="text-align: center;">
-                        <a href="#" class="button">Activate License</a>
-                      </div>
-
-                      <div class="footer">
-                        <p>If you have any questions, please contact our support team.</p>
-                        <p>&copy; ${new Date().getFullYear()} Your Company. All rights reserved.</p>
-                      </div>
-                    </div>
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #4CAF50;">Payment Confirmation</h2>
+                  <p>Thank you for your payment!</p>
+                  
+                  <div style="background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <h3 style="margin-top: 0;">Your License Key:</h3>
+                    <p style="font-size: 18px; font-weight: bold; color: #333; background: white; padding: 15px; border-radius: 4px; font-family: monospace;">
+                      ${licenseKey}
+                    </p>
+                    <p style="font-size: 12px; color: #666;">Please save this license key. You'll need it to activate your product.</p>
                   </div>
-                </body>
-                </html>
+                  
+                  <h3>Payment Details:</h3>
+                  <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                      <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Payment ID:</strong></td>
+                      <td style="padding: 8px; border-bottom: 1px solid #ddd;">${paymentEntity.id}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Amount:</strong></td>
+                      <td style="padding: 8px; border-bottom: 1px solid #ddd;">${paymentEntity.currency.toUpperCase()} ${(paymentEntity.amount / 100).toFixed(2)}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Status:</strong></td>
+                      <td style="padding: 8px; border-bottom: 1px solid #ddd;">${paymentEntity.status}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Expires:</strong></td>
+                      <td style="padding: 8px; border-bottom: 1px solid #ddd;">${expiresAt.toLocaleDateString()}</td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 8px; border-bottom: 1px solid #ddd;"><strong>Max Activations:</strong></td>
+                      <td style="padding: 8px; border-bottom: 1px solid #ddd;">1 device</td>
+                    </tr>
+                  </table>
+                  
+                  <div style="margin-top: 30px; padding: 15px; background: #e3f2fd; border-radius: 8px;">
+                    <h4 style="margin-top: 0; color: #1976d2;">How to Activate:</h4>
+                    <ol style="line-height: 1.8;">
+                      <li>Open the application</li>
+                      <li>Enter your license key when prompted</li>
+                      <li>Click "Activate"</li>
+                      <li>Start using your product!</li>
+                    </ol>
+                  </div>
+                  
+                  <p style="margin-top: 30px; font-size: 12px; color: #666;">
+                    If you have any questions or need assistance, please contact our support team.
+                  </p>
+                </div>
               `,
             });
 
             if (emailError) {
               console.error("Email error:", emailError);
             } else {
-              console.log("Email sent with license key:", emailData);
+              console.log("Email sent:", emailData);
             }
           }
         } catch (error) {
@@ -249,7 +233,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Send failure notification email
-          if (failedPayment.email) {
+          if (failedPayment.email && resend) {
             await resend.emails.send({
               from: process.env.FROM_EMAIL || "onboarding@resend.dev",
               to: failedPayment.email,

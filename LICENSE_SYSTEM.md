@@ -1,429 +1,461 @@
-# 🔐 License Management System
+# 🔑 License Management System Documentation
 
 ## Overview
 
-Your system now includes a complete license management solution that automatically generates license keys when payments are successful and provides APIs to activate, verify, and manage licenses.
-
-## 🎯 Features
-
-- ✅ Automatic license generation on successful payment
-- ✅ License activation with device tracking
-- ✅ License verification
-- ✅ Multi-device support (configurable)
-- ✅ Expiration date management
-- ✅ Email delivery with license keys
-- ✅ Beautiful HTML email templates
+Your API now includes a complete license management system that:
+- ✅ Auto-generates licenses on successful payments
+- ✅ Sends license keys via email
+- ✅ Validates and activates licenses
+- ✅ Manages device bindings
+- ✅ Tracks license status and expiry
 
 ---
 
-## 📊 Database Schema
+## 📊 Database Structure
 
-Your `licenses` table includes:
+Your Supabase `licenses` table has:
 
-```
-- id (uuid, primary key)
-- license_key (text, unique)
-- email (text)
-- phone (text)
-- razorpay_payment_id (text)
-- razorpay_order_id (text)
-- amount (int4)
-- currency (text)
-- status (text) - active, expired, revoked
-- device_id (text) - tracks activated device
-- activations (int4) - current activation count
-- max_activations (int4) - maximum allowed activations
-- created_at (timestamp)
-- activated_at (timestamp)
-- expires_at (timestamp)
-```
-
----
-
-## 🚀 How It Works
-
-### 1. Payment → License Generation
-
-When a customer completes payment:
-
-1. **Payment webhook received** from Razorpay
-2. **License key generated** (e.g., `LIC-A3F5B2C8D9E1F4A7B5C2D8E3F6A9B1C4`)
-3. **License saved** to database with:
-   - Customer email & phone
-   - Payment details
-   - Expiration date
-   - Max activations
-4. **Email sent** with license key and details
-
-### 2. Pricing Logic
-
-Current implementation (customize in webhook):
-
-| Amount | Max Devices | Validity |
-|--------|-------------|----------|
-| ₹999+ | 5 devices | 365 days |
-| ₹499+ | 3 devices | 180 days |
-| ₹199+ | 1 device | 90 days |
-| Default | 1 device | 30 days |
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | uuid | Primary key |
+| `license_key` | text | Unique license key (LIC-...) |
+| `email` | text | Customer email |
+| `phone` | text | Customer phone |
+| `razorpay_payment_id` | text | Payment reference |
+| `razorpay_order_id` | text | Order reference |
+| `amount` | int4 | Purchase amount |
+| `currency` | text | Currency code |
+| `status` | text | active/revoked/expired |
+| `device_id` | text | Bound device ID |
+| `activations` | int4 | Activation count |
+| `max_activations` | int4 | Max allowed activations |
+| `created_at` | timestamp | Creation date |
+| `activated_at` | timestamp | First activation date |
+| `expires_at` | timestamp | Expiry date |
 
 ---
 
-## 📡 API Endpoints
+## 🔄 Payment Flow
 
-### 1. Activate License
+### When a customer pays via Razorpay:
 
-**Endpoint:** `POST /api/license`
+1. **Payment Captured** → Webhook triggered
+2. **License Generated** → Unique key created
+3. **Saved to Database** → License stored in Supabase
+4. **Email Sent** → Customer receives license key via Resend
+5. **Ready to Activate** → Customer can activate on their device
+
+---
+
+## 🎯 API Endpoints
+
+### 1️⃣ Verify License (GET Info)
+
+**Endpoint:** `POST /api/license/verify`
 
 **Request:**
 ```json
 {
-  "license_key": "LIC-A3F5B2C8D9E1F4A7B5C2D8E3F6A9B1C4",
-  "device_id": "DEVICE-12345",
-  "email": "customer@example.com" // optional
+  "license_key": "LIC-1234567890-ABC123XY"
 }
 ```
 
-**Success Response (200):**
+**Response (Success):**
+```json
+{
+  "valid": true,
+  "license": {
+    "license_key": "LIC-1234567890-ABC123XY",
+    "status": "active",
+    "expires_at": "2027-02-10T00:00:00.000Z",
+    "activations": 0,
+    "max_activations": 1,
+    "is_activated": false
+  }
+}
+```
+
+**Response (Invalid):**
+```json
+{
+  "error": "Invalid license key"
+}
+```
+
+---
+
+### 2️⃣ Activate License (Bind to Device)
+
+**Endpoint:** `POST /api/license/verify`
+
+**Request:**
+```json
+{
+  "license_key": "LIC-1234567890-ABC123XY",
+  "device_id": "device-abc-123"
+}
+```
+
+**Response (Success):**
 ```json
 {
   "success": true,
   "message": "License activated successfully",
   "license": {
-    "license_key": "LIC-...",
+    "license_key": "LIC-1234567890-ABC123XY",
     "status": "active",
+    "expires_at": "2027-02-10T00:00:00.000Z",
+    "activated_at": "2026-02-10T12:00:00.000Z",
     "activations": 1,
-    "max_activations": 3,
-    "activated_at": "2026-02-10T...",
-    "expires_at": "2026-08-10T..."
+    "max_activations": 1
   }
 }
 ```
 
-**Error Responses:**
-- `400` - Missing required fields
-- `403` - License expired / max activations reached
-- `404` - Invalid license key
-
----
-
-### 2. Verify License
-
-**Endpoint:** `GET /api/license?license_key=LIC-...&device_id=DEVICE-123`
-
-**Query Parameters:**
-- `license_key` (required) - The license key to verify
-- `device_id` (optional) - Check if license is valid for this device
-
-**Success Response (200):**
+**Response (Already Activated):**
 ```json
 {
-  "valid": true,
-  "license": {
-    "license_key": "LIC-...",
-    "status": "active",
-    "activations": 1,
-    "max_activations": 3,
-    "activated_at": "2026-02-10T...",
-    "expires_at": "2026-08-10T...",
-    "is_expired": false,
-    "device_matches": true
-  }
+  "error": "License already activated on another device",
+  "device_id": "different-device-id"
 }
 ```
 
 ---
 
-### 3. Deactivate License
+### 3️⃣ Deactivate License (Remove Device Binding)
 
-**Endpoint:** `DELETE /api/license`
+**Endpoint:** `POST /api/license/manage`
 
 **Request:**
 ```json
 {
-  "license_key": "LIC-A3F5B2C8D9E1F4A7B5C2D8E3F6A9B1C4",
-  "device_id": "DEVICE-12345"
+  "license_key": "LIC-1234567890-ABC123XY",
+  "action": "deactivate"
 }
 ```
 
-**Success Response (200):**
+**Response:**
 ```json
 {
   "success": true,
-  "message": "License deactivated successfully"
-}
-```
-
----
-
-## 💻 Client Integration Examples
-
-### JavaScript/TypeScript
-
-```javascript
-// Activate license
-async function activateLicense(licenseKey, deviceId) {
-  const response = await fetch('https://your-api.com/api/license', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      license_key: licenseKey,
-      device_id: deviceId,
-    }),
-  });
-  
-  const data = await response.json();
-  
-  if (data.success) {
-    console.log('License activated!');
-    // Store license info locally
-    localStorage.setItem('license', JSON.stringify(data.license));
+  "message": "License deactivated successfully",
+  "license": {
+    "license_key": "LIC-1234567890-ABC123XY",
+    "status": "active",
+    "device_id": null
   }
 }
+```
 
-// Verify license
-async function verifyLicense(licenseKey, deviceId) {
-  const response = await fetch(
-    `https://your-api.com/api/license?license_key=${licenseKey}&device_id=${deviceId}`
-  );
-  
-  const data = await response.json();
-  return data.valid;
+**Use Case:** Customer wants to move license to a new device
+
+---
+
+### 4️⃣ Revoke License (Permanently Disable)
+
+**Endpoint:** `POST /api/license/manage`
+
+**Request:**
+```json
+{
+  "license_key": "LIC-1234567890-ABC123XY",
+  "action": "revoke"
 }
 ```
 
+**Response:**
+```json
+{
+  "success": true,
+  "message": "License revoked successfully",
+  "license": {
+    "license_key": "LIC-1234567890-ABC123XY",
+    "status": "revoked",
+    "device_id": null
+  }
+}
+```
+
+**Use Case:** Refund issued, piracy detected, or customer requested cancellation
+
 ---
+
+## 📧 Email Template
+
+When payment is successful, customer receives:
+
+```
+Subject: Payment Successful! 🎉 Your License Key
+
+Your License Key:
+LIC-1234567890-ABC123XY
+
+Payment Details:
+- Payment ID: pay_xxxxx
+- Amount: INR 999.00
+- Status: captured
+- Expires: Feb 10, 2027
+- Max Activations: 1 device
+
+How to Activate:
+1. Open the application
+2. Enter your license key
+3. Click "Activate"
+4. Start using your product!
+```
+
+---
+
+## 🔒 Security Features
+
+### ✅ Validation Checks
+
+1. **License Existence** - Key must exist in database
+2. **Expiry Check** - Must not be past expiration date
+3. **Status Check** - Must be "active" status
+4. **Device Binding** - Can only activate on one device
+5. **Activation Limit** - Respects max_activations setting
+
+### ✅ Protection Against
+
+- ❌ License key sharing (device binding)
+- ❌ Unlimited activations (activation limits)
+- ❌ Expired license usage (expiry validation)
+- ❌ Revoked license reuse (status checking)
+
+---
+
+## 💻 Integration Examples
+
+### JavaScript/TypeScript (Frontend)
+
+```javascript
+// Verify license
+async function verifyLicense(licenseKey) {
+  const response = await fetch('https://yourapi.com/api/license/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ license_key: licenseKey })
+  });
+  return await response.json();
+}
+
+// Activate license
+async function activateLicense(licenseKey, deviceId) {
+  const response = await fetch('https://yourapi.com/api/license/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      license_key: licenseKey,
+      device_id: deviceId 
+    })
+  });
+  return await response.json();
+}
+```
 
 ### Python
 
 ```python
 import requests
 
+def verify_license(license_key):
+    response = requests.post(
+        'https://yourapi.com/api/license/verify',
+        json={'license_key': license_key}
+    )
+    return response.json()
+
 def activate_license(license_key, device_id):
     response = requests.post(
-        'https://your-api.com/api/license',
+        'https://yourapi.com/api/license/verify',
         json={
             'license_key': license_key,
             'device_id': device_id
         }
     )
-    
-    if response.status_code == 200:
-        data = response.json()
-        print(f"License activated: {data['license']['expires_at']}")
-        return True
-    return False
+    return response.json()
+```
 
-def verify_license(license_key, device_id):
-    response = requests.get(
-        f'https://your-api.com/api/license',
-        params={
-            'license_key': license_key,
-            'device_id': device_id
-        }
-    )
-    
-    data = response.json()
-    return data.get('valid', False)
+### cURL
+
+```bash
+# Verify
+curl -X POST https://yourapi.com/api/license/verify \
+  -H "Content-Type: application/json" \
+  -d '{"license_key":"LIC-1234567890-ABC123XY"}'
+
+# Activate
+curl -X POST https://yourapi.com/api/license/verify \
+  -H "Content-Type: application/json" \
+  -d '{"license_key":"LIC-1234567890-ABC123XY","device_id":"device-123"}'
 ```
 
 ---
 
-### C# / Unity
-
-```csharp
-using UnityEngine;
-using System.Net.Http;
-using System.Threading.Tasks;
-
-public class LicenseManager
-{
-    private static readonly HttpClient client = new HttpClient();
-    private const string API_URL = "https://your-api.com/api/license";
-    
-    public async Task<bool> ActivateLicense(string licenseKey, string deviceId)
-    {
-        var content = new StringContent(
-            $"{{\"license_key\":\"{licenseKey}\",\"device_id\":\"{deviceId}\"}}",
-            System.Text.Encoding.UTF8,
-            "application/json"
-        );
-        
-        var response = await client.PostAsync(API_URL, content);
-        return response.IsSuccessStatusCode;
-    }
-    
-    public async Task<bool> VerifyLicense(string licenseKey, string deviceId)
-    {
-        var response = await client.GetAsync(
-            $"{API_URL}?license_key={licenseKey}&device_id={deviceId}"
-        );
-        
-        var json = await response.Content.ReadAsStringAsync();
-        // Parse JSON and return valid status
-        return true; // Implement JSON parsing
-    }
-}
-```
-
----
-
-## 📧 Email Template
-
-When a license is generated, customers receive:
-
-- ✅ Beautiful HTML email
-- ✅ Large, easy-to-copy license key
-- ✅ Payment details
-- ✅ License information (expiry, max devices)
-- ✅ Activation instructions
-- ✅ Support contact info
-
----
-
-## 🎨 Customization
-
-### Change Pricing Logic
-
-Edit `/app/api/razorpay/webhook/route.ts`:
-
-```typescript
-// Custom pricing based on amount
-const amount = paymentEntity.amount / 100;
-let maxActivations = 1;
-let daysValid = 30;
-
-if (amount >= 1999) {
-  maxActivations = 10;
-  daysValid = 730; // 2 years
-} else if (amount >= 999) {
-  maxActivations = 5;
-  daysValid = 365;
-}
-// ... add more tiers
-```
-
-### Customize License Key Format
-
-```typescript
-// Current: LIC-A3F5B2C8D9E1F4A7B5C2D8E3F6A9B1C4
-// Custom format:
-const licenseKey = `YourPrefix-${crypto.randomBytes(12).toString("hex").toUpperCase()}`;
-```
-
-### Custom Email Design
-
-Edit the HTML template in the webhook file to match your brand.
-
----
-
-## 🧪 Testing
+## 🎮 Testing
 
 ### Test Page
+Visit: `http://localhost:3000/test.html`
 
-Visit `http://localhost:3000/test.html` to:
-- ✅ Test payment webhook
-- ✅ Activate licenses
-- ✅ Verify licenses
-- ✅ View real-time results
+The test page includes:
+- ✅ License verification form
+- ✅ License activation with device ID
+- ✅ Deactivation testing
+- ✅ Revocation testing
 
 ### Manual Testing Steps
 
-1. **Trigger payment** (use Razorpay test mode)
+1. **Create a test payment** in Razorpay (test mode)
 2. **Check email** for license key
-3. **Activate license** using test page
-4. **Verify license** status
-5. **Check Supabase** database for records
+3. **Copy license key** from email
+4. **Verify** license on test page
+5. **Activate** with a test device ID
+6. **Try activating again** with different device (should fail)
+7. **Deactivate** the license
+8. **Activate** with new device ID (should work)
 
 ---
 
-## 🔒 Security Features
+## 📝 Customization Options
 
-- ✅ Webhook signature verification
-- ✅ Device binding
-- ✅ Expiration checks
-- ✅ Email verification (optional)
-- ✅ Max activation limits
-- ✅ Row-level security in Supabase
+### Change License Duration
 
----
+In `webhook/route.ts`, modify expiry calculation:
 
-## 📊 Monitoring
+```typescript
+// 1 year (current)
+expiresAt.setFullYear(expiresAt.getFullYear() + 1);
 
-### Check License Status
+// 1 month
+expiresAt.setMonth(expiresAt.getMonth() + 1);
 
-Query Supabase:
-
-```sql
--- Active licenses
-SELECT * FROM licenses WHERE status = 'active' AND expires_at > NOW();
-
--- Expired licenses
-SELECT * FROM licenses WHERE expires_at < NOW();
-
--- Most activations
-SELECT * FROM licenses ORDER BY activations DESC LIMIT 10;
+// Lifetime (100 years)
+expiresAt.setFullYear(expiresAt.getFullYear() + 100);
 ```
 
-### Analytics Queries
+### Change Max Activations
 
-```sql
--- Total revenue
-SELECT SUM(amount/100) as total_revenue FROM licenses;
+```typescript
+max_activations: 1,  // Single device
+max_activations: 3,  // Up to 3 devices
+max_activations: 999, // Unlimited
+```
 
--- Licenses by month
-SELECT DATE_TRUNC('month', created_at) as month, COUNT(*) as licenses
-FROM licenses
-GROUP BY month
-ORDER BY month DESC;
+### Custom License Key Format
+
+```typescript
+// Current format: LIC-1707654321-ABC123XY
+const licenseKey = `LIC-${Date.now()}-${Math.random()...}`;
+
+// Custom format: MYAPP-2026-XXXXXXXXXX
+const licenseKey = `MYAPP-${new Date().getFullYear()}-${...}`;
 ```
 
 ---
 
-## 🐛 Troubleshooting
+## 🚨 Error Codes
 
-### License Not Generated
-
-- Check Razorpay webhook delivery
-- Verify `SUPABASE_URL` and `SUPABASE_KEY` are set
-- Check Vercel function logs
-
-### Email Not Sent
-
-- Verify `RESEND_API_KEY` is correct
-- Check `FROM_EMAIL` is verified in Resend
-- Look for errors in function logs
-
-### Activation Failed
-
-- Ensure license exists in database
-- Check if max_activations reached
-- Verify license hasn't expired
+| Status | Error | Meaning |
+|--------|-------|---------|
+| 400 | License key is required | Missing license_key in request |
+| 403 | License has expired | Past expiration date |
+| 403 | License is revoked | Status is not "active" |
+| 403 | Already activated on another device | Different device_id bound |
+| 403 | Maximum activation limit reached | Hit max_activations |
+| 404 | Invalid license key | Key not found in database |
+| 500 | Internal server error | Database or server issue |
 
 ---
 
-## 🚀 Production Checklist
+## 🔄 Maintenance Tasks
 
-- [ ] Run SQL schema in Supabase
-- [ ] Set all environment variables on Vercel
-- [ ] Test webhook with Razorpay test mode
+### Check Expired Licenses
+
+Run this SQL in Supabase to find expired licenses:
+
+```sql
+SELECT * FROM licenses 
+WHERE expires_at < NOW() 
+AND status = 'active';
+```
+
+### Update Expired Licenses Status
+
+```sql
+UPDATE licenses 
+SET status = 'expired' 
+WHERE expires_at < NOW() 
+AND status = 'active';
+```
+
+### View Active Licenses
+
+```sql
+SELECT 
+  license_key, 
+  email, 
+  status, 
+  device_id,
+  expires_at 
+FROM licenses 
+WHERE status = 'active' 
+ORDER BY created_at DESC;
+```
+
+---
+
+## 📊 Analytics Queries
+
+### Total Revenue
+```sql
+SELECT 
+  SUM(amount) as total_revenue,
+  currency
+FROM licenses 
+WHERE status != 'revoked'
+GROUP BY currency;
+```
+
+### Active Users
+```sql
+SELECT COUNT(*) as active_users 
+FROM licenses 
+WHERE status = 'active' 
+AND device_id IS NOT NULL;
+```
+
+### Activation Rate
+```sql
+SELECT 
+  COUNT(CASE WHEN device_id IS NOT NULL THEN 1 END) as activated,
+  COUNT(*) as total,
+  ROUND(COUNT(CASE WHEN device_id IS NOT NULL THEN 1 END)::numeric / COUNT(*) * 100, 2) as activation_rate_percent
+FROM licenses 
+WHERE status = 'active';
+```
+
+---
+
+## 🎯 Production Checklist
+
+- [ ] Run SQL schema in production Supabase
+- [ ] Update environment variables on Vercel
+- [ ] Test payment flow end-to-end
 - [ ] Verify email delivery
-- [ ] Test license activation flow
+- [ ] Test license activation
 - [ ] Set up monitoring/alerts
-- [ ] Add analytics tracking
-- [ ] Document for your team
-- [ ] Test error scenarios
-- [ ] Enable Razorpay webhook in production
+- [ ] Document customer support process
+- [ ] Create refund/revocation policy
 
 ---
 
 ## 📞 Support
 
-For issues or questions:
-1. Check Vercel deployment logs
-2. Review Supabase database
-3. Verify environment variables
-4. Test with provided test page
+For customer support, you can:
+1. Check license status in Supabase dashboard
+2. Deactivate license to allow device change
+3. Extend expiry date if needed
+4. Revoke license for refunds
 
----
-
-**Your license system is now complete and production-ready! 🎉**
+All operations can be done directly in Supabase UI or via API.
