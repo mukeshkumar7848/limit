@@ -4,13 +4,13 @@ const { Resend } = require('resend');
 const resend = new Resend('re_2aHMAW4U_GCwq9wuye6Tss8QPoxEgkENL');
 
 const licenseKey = 'LIC-1770673217282-T1BDVMI0';
-const email = 'choudharm187@gmail.com'; // Resend test mode - must use account owner email
+const email = 'workwithmukeshkumar@gmail.com'; // Now works with verified domain!
 const expiresAt = new Date('2027-02-09T21:40:17.282Z');
 
 async function sendEmail() {
   try {
     const { data, error } = await resend.emails.send({
-      from: 'onboarding@resend.dev',
+      from: 'license@notifications.mukeshfx.com',
       to: email,
       subject: 'Your License Key - Payment Successful! 🎉',
       html: `
