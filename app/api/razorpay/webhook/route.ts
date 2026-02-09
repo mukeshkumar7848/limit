@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         console.log("Payment captured:", paymentEntity);
         
         try {
-          // Save to Supabase
+          // Save payment to Supabase
           const { data: paymentData, error: dbError } = await supabase
             .from("payments")
             .insert({
@@ -90,26 +90,128 @@ export async function POST(request: NextRequest) {
             console.log("Payment saved to database:", paymentData);
           }
 
-          // Send success email
+          // Generate and create license
+          const crypto = await import("crypto");
+          const licenseKey = `LIC-${crypto.randomBytes(16).toString("hex").toUpperCase()}`;
+          
+          // Determine license duration based on amount or order notes
+          // You can customize this logic based on your pricing
+          const amount = paymentEntity.amount / 100;
+          let maxActivations = 1;
+          let daysValid = 30; // default 30 days
+          
+          // Example pricing logic (customize as needed)
+          if (amount >= 999) {
+            maxActivations = 5;
+            daysValid = 365; // 1 year
+          } else if (amount >= 499) {
+            maxActivations = 3;
+            daysValid = 180; // 6 months
+          } else if (amount >= 199) {
+            maxActivations = 1;
+            daysValid = 90; // 3 months
+          }
+
+          const expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + daysValid);
+
+          // Create license in database
+          const { data: licenseData, error: licenseError } = await supabase
+            .from("licenses")
+            .insert({
+              license_key: licenseKey,
+              email: paymentEntity.email,
+              phone: paymentEntity.contact,
+              razorpay_payment_id: paymentEntity.id,
+              razorpay_order_id: paymentEntity.order_id,
+              amount: paymentEntity.amount,
+              currency: paymentEntity.currency,
+              status: "active",
+              activations: 0,
+              max_activations: maxActivations,
+              created_at: new Date().toISOString(),
+              expires_at: expiresAt.toISOString(),
+            })
+            .select()
+            .single();
+
+          if (licenseError) {
+            console.error("License creation error:", licenseError);
+          } else {
+            console.log("License created:", licenseData);
+          }
+
+          // Send success email with license key
           if (paymentEntity.email) {
             const { data: emailData, error: emailError } = await resend.emails.send({
               from: process.env.FROM_EMAIL || "onboarding@resend.dev",
               to: paymentEntity.email,
-              subject: "Payment Successful! 🎉",
+              subject: "Payment Successful! 🎉 Your License Key",
               html: `
-                <h2>Payment Confirmation</h2>
-                <p>Thank you for your payment!</p>
-                <p><strong>Payment ID:</strong> ${paymentEntity.id}</p>
-                <p><strong>Amount:</strong> ${paymentEntity.currency.toUpperCase()} ${(paymentEntity.amount / 100).toFixed(2)}</p>
-                <p><strong>Status:</strong> ${paymentEntity.status}</p>
-                <p>We've received your payment successfully.</p>
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <style>
+                    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
+                    .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
+                    .license-box { background: white; border: 2px solid #667eea; padding: 20px; margin: 20px 0; border-radius: 8px; text-align: center; }
+                    .license-key { font-size: 18px; font-weight: bold; color: #667eea; letter-spacing: 2px; word-break: break-all; }
+                    .details { background: white; padding: 15px; margin: 20px 0; border-radius: 8px; }
+                    .footer { text-align: center; margin-top: 30px; color: #666; font-size: 12px; }
+                    .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 10px 0; }
+                  </style>
+                </head>
+                <body>
+                  <div class="container">
+                    <div class="header">
+                      <h1>🎉 Payment Successful!</h1>
+                      <p>Thank you for your purchase</p>
+                    </div>
+                    <div class="content">
+                      <h2>Your License Key</h2>
+                      <div class="license-box">
+                        <p style="margin: 0 0 10px 0;">License Key:</p>
+                        <div class="license-key">${licenseKey}</div>
+                      </div>
+                      
+                      <div class="details">
+                        <h3>Payment Details</h3>
+                        <p><strong>Payment ID:</strong> ${paymentEntity.id}</p>
+                        <p><strong>Amount:</strong> ${paymentEntity.currency.toUpperCase()} ${(paymentEntity.amount / 100).toFixed(2)}</p>
+                        <p><strong>Status:</strong> ${paymentEntity.status}</p>
+                        <p><strong>Method:</strong> ${paymentEntity.method}</p>
+                      </div>
+
+                      <div class="details">
+                        <h3>License Information</h3>
+                        <p><strong>Max Activations:</strong> ${maxActivations} device(s)</p>
+                        <p><strong>Valid Until:</strong> ${expiresAt.toLocaleDateString()}</p>
+                        <p><strong>Current Activations:</strong> 0</p>
+                      </div>
+
+                      <p><strong>Important:</strong> Keep this license key safe. You'll need it to activate your software.</p>
+                      
+                      <div style="text-align: center;">
+                        <a href="#" class="button">Activate License</a>
+                      </div>
+
+                      <div class="footer">
+                        <p>If you have any questions, please contact our support team.</p>
+                        <p>&copy; ${new Date().getFullYear()} Your Company. All rights reserved.</p>
+                      </div>
+                    </div>
+                  </div>
+                </body>
+                </html>
               `,
             });
 
             if (emailError) {
               console.error("Email error:", emailError);
             } else {
-              console.log("Email sent:", emailData);
+              console.log("Email sent with license key:", emailData);
             }
           }
         } catch (error) {

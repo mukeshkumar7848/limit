@@ -187,6 +187,28 @@
             <button onclick="testAllAPIs()">Run All Tests</button>
             <div id="all-response" class="response" style="display:none;"></div>
         </div>
+
+        <!-- License Management -->
+        <div class="api-section">
+            <h2>🔐 License Management</h2>
+            <div class="info">
+                <strong>Endpoint:</strong> /api/license<br>
+                <strong>Methods:</strong> POST (activate), GET (verify), DELETE (deactivate)
+            </div>
+            
+            <h3>Activate License</h3>
+            <input type="text" id="activate-license-key" placeholder="Enter License Key" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+            <input type="text" id="activate-device-id" placeholder="Device ID (e.g., DEVICE-123)" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+            <input type="email" id="activate-email" placeholder="Email (optional)" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+            <button onclick="activateLicense()">Activate License</button>
+            
+            <h3>Verify License</h3>
+            <input type="text" id="verify-license-key" placeholder="Enter License Key" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+            <input type="text" id="verify-device-id" placeholder="Device ID (optional)" style="width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px;">
+            <button onclick="verifyLicense()">Verify License</button>
+            
+            <div id="license-response" class="response" style="display:none;"></div>
+        </div>
     </div>
 
     <script>
@@ -360,6 +382,85 @@
         window.addEventListener('load', () => {
             console.log('API Test Dashboard loaded. Ready to test!');
         });
+
+        // License activation
+        async function activateLicense() {
+            const responseDiv = document.getElementById('license-response');
+            const licenseKey = document.getElementById('activate-license-key').value;
+            const deviceId = document.getElementById('activate-device-id').value;
+            const email = document.getElementById('activate-email').value;
+
+            if (!licenseKey || !deviceId) {
+                alert('Please enter both license key and device ID');
+                return;
+            }
+
+            responseDiv.style.display = 'block';
+            responseDiv.className = 'response loading';
+            responseDiv.textContent = 'Activating license...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/license`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        license_key: licenseKey,
+                        device_id: deviceId,
+                        email: email || undefined,
+                    }),
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    responseDiv.className = 'response success';
+                } else {
+                    responseDiv.className = 'response error';
+                }
+                responseDiv.textContent = `Status: ${response.status}\n` + JSON.stringify(data, null, 2);
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // License verification
+        async function verifyLicense() {
+            const responseDiv = document.getElementById('license-response');
+            const licenseKey = document.getElementById('verify-license-key').value;
+            const deviceId = document.getElementById('verify-device-id').value;
+
+            if (!licenseKey) {
+                alert('Please enter a license key');
+                return;
+            }
+
+            responseDiv.style.display = 'block';
+            responseDiv.className = 'response loading';
+            responseDiv.textContent = 'Verifying license...';
+
+            try {
+                let url = `${API_BASE}/api/license?license_key=${encodeURIComponent(licenseKey)}`;
+                if (deviceId) {
+                    url += `&device_id=${encodeURIComponent(deviceId)}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                if (data.valid) {
+                    responseDiv.className = 'response success';
+                } else {
+                    responseDiv.className = 'response error';
+                }
+                responseDiv.textContent = `Status: ${response.status}\n` + JSON.stringify(data, null, 2);
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = `Error: ${error.message}`;
+            }
+        }
     </script>
 </body>
 </html>
