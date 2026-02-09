@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test Page</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: white;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .api-section {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .api-section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .response {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .loading {
+            color: #667eea;
+            font-style: italic;
+        }
+
+        .error {
+            border-left-color: #e74c3c;
+            color: #e74c3c;
+        }
+
+        .success {
+            border-left-color: #27ae60;
+            color: #27ae60;
+        }
+
+        .image-preview {
+            margin-top: 15px;
+            text-align: center;
+        }
+
+        .image-preview img {
+            max-width: 100%;
+            max-height: 300px;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            border-left: 4px solid #2196f3;
+        }
+
+        .info strong {
+            color: #1976d2;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 API Test Dashboard</h1>
+
+        <div class="grid">
+            <!-- Advertisement API -->
+            <div class="api-section">
+                <h2>📢 Advertisement API</h2>
+                <div class="info">
+                    <strong>Endpoint:</strong> /api/advertisement<br>
+                    <strong>Method:</strong> GET
+                </div>
+                <button onclick="testAdvertisement()">Test Advertisement API</button>
+                <div id="ad-response" class="response" style="display:none;"></div>
+                <div id="ad-image" class="image-preview"></div>
+            </div>
+
+            <!-- Config API -->
+            <div class="api-section">
+                <h2>⚙️ Config API</h2>
+                <div class="info">
+                    <strong>Endpoint:</strong> /api/config<br>
+                    <strong>Method:</strong> GET
+                </div>
+                <button onclick="testConfig()">Test Config API</button>
+                <div id="config-response" class="response" style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- Razorpay Webhook Test -->
+        <div class="api-section">
+            <h2>💳 Razorpay Webhook Test</h2>
+            <div class="info">
+                <strong>Endpoint:</strong> /api/razorpay/webhook<br>
+                <strong>Method:</strong> POST<br>
+                <strong>Note:</strong> In production, this is called by Razorpay. Here we'll test the endpoint availability.
+            </div>
+            <button onclick="testWebhookGET()">Test Webhook (GET - Should Fail)</button>
+            <button onclick="testWebhookPOST()">Test Webhook (POST - No Signature)</button>
+            <div id="webhook-response" class="response" style="display:none;"></div>
+        </div>
+
+        <!-- All APIs Test -->
+        <div class="api-section">
+            <h2>🔥 Test All APIs</h2>
+            <button onclick="testAllAPIs()">Run All Tests</button>
+            <div id="all-response" class="response" style="display:none;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+
+        async function testAdvertisement() {
+            const responseDiv = document.getElementById('ad-response');
+            const imageDiv = document.getElementById('ad-image');
+            responseDiv.style.display = 'block';
+            responseDiv.className = 'response loading';
+            responseDiv.textContent = 'Loading...';
+            imageDiv.innerHTML = '';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/advertisement`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const contentType = response.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    const text = await response.text();
+                    throw new Error(`Expected JSON but got: ${contentType}\n\n${text.substring(0, 500)}`);
+                }
+                
+                const data = await response.json();
+                
+                responseDiv.className = 'response success';
+                responseDiv.textContent = JSON.stringify(data, null, 2);
+
+                if (data.advertisementImageUrl) {
+                    imageDiv.innerHTML = `
+                        <h3>Advertisement Preview:</h3>
+                        <img src="${data.advertisementImageUrl}" alt="Advertisement" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22200%22 height=%22200%22%3E%3Crect fill=%22%23ddd%22 width=%22200%22 height=%22200%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 dy=%22.3em%22 fill=%22%23999%22%3EImage Failed%3C/text%3E%3C/svg%3E'">
+                        ${data.redirectUrl ? `<p><a href="${data.redirectUrl}" target="_blank" style="color: #667eea; text-decoration: none; font-weight: bold;">🔗 Click to visit: ${data.redirectUrl}</a></p>` : ''}
+                    `;
+                }
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function testConfig() {
+            const responseDiv = document.getElementById('config-response');
+            responseDiv.style.display = 'block';
+            responseDiv.className = 'response loading';
+            responseDiv.textContent = 'Loading...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/config`);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const contentType = response.headers.get("content-type");
+                if (!contentType || !contentType.includes("application/json")) {
+                    const text = await response.text();
+                    throw new Error(`Expected JSON but got: ${contentType}\n\n${text.substring(0, 500)}`);
+                }
+                
+                const data = await response.json();
+                
+                responseDiv.className = 'response success';
+                responseDiv.textContent = JSON.stringify(data, null, 2);
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function testWebhookGET() {
+            const responseDiv = document.getElementById('webhook-response');
+            responseDiv.style.display = 'block';
+            responseDiv.className = 'response loading';
+            responseDiv.textContent = 'Testing GET request (should return 405)...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/razorpay/webhook`);
+                const data = await response.json();
+                
+                responseDiv.className = 'response';
+                responseDiv.textContent = `Status: ${response.status}\n` + JSON.stringify(data, null, 2);
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function testWebhookPOST() {
+            const responseDiv = document.getElementById('webhook-response');
+            responseDiv.style.display = 'block';
+            responseDiv.className = 'response loading';
+            responseDiv.textContent = 'Testing POST request without signature (should fail)...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/razorpay/webhook`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        event: 'payment.captured',
+                        payload: {
+                            payment: {
+                                entity: {
+                                    id: 'test_payment_id'
+                                }
+                            }
+                        }
+                    })
+                });
+                const data = await response.json();
+                
+                responseDiv.className = 'response';
+                responseDiv.textContent = `Status: ${response.status}\n` + JSON.stringify(data, null, 2);
+            } catch (error) {
+                responseDiv.className = 'response error';
+                responseDiv.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function testAllAPIs() {
+            const responseDiv = document.getElementById('all-response');
+            responseDiv.style.display = 'block';
+            responseDiv.className = 'response loading';
+            responseDiv.textContent = 'Running all tests...\n\n';
+
+            let results = '';
+
+            // Test Advertisement API
+            results += '📢 Testing Advertisement API...\n';
+            try {
+                const adResponse = await fetch(`${API_BASE}/api/advertisement`);
+                const adData = await adResponse.json();
+                results += `✅ Success (${adResponse.status})\n`;
+                results += JSON.stringify(adData, null, 2) + '\n\n';
+            } catch (error) {
+                results += `❌ Failed: ${error.message}\n\n`;
+            }
+
+            // Test Config API
+            results += '⚙️ Testing Config API...\n';
+            try {
+                const configResponse = await fetch(`${API_BASE}/api/config`);
+                const configData = await configResponse.json();
+                results += `✅ Success (${configResponse.status})\n`;
+                results += JSON.stringify(configData, null, 2) + '\n\n';
+            } catch (error) {
+                results += `❌ Failed: ${error.message}\n\n`;
+            }
+
+            // Test Webhook GET
+            results += '💳 Testing Webhook (GET)...\n';
+            try {
+                const webhookResponse = await fetch(`${API_BASE}/api/razorpay/webhook`);
+                const webhookData = await webhookResponse.json();
+                results += `Status: ${webhookResponse.status}\n`;
+                results += JSON.stringify(webhookData, null, 2) + '\n\n';
+            } catch (error) {
+                results += `❌ Failed: ${error.message}\n\n`;
+            }
+
+            responseDiv.className = 'response success';
+            responseDiv.textContent = results;
+        }
+
+        // Auto-test on page load
+        window.addEventListener('load', () => {
+            console.log('API Test Dashboard loaded. Ready to test!');
+        });
+    </script>
+</body>
+</html>
