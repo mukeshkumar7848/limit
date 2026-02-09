@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Razorpay Test Payment</title>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2rem;
+        }
+
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .pricing-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 2px solid #667eea;
+        }
+
+        .price {
+            font-size: 3rem;
+            font-weight: bold;
+            color: #667eea;
+            margin: 15px 0;
+        }
+
+        .price small {
+            font-size: 1.5rem;
+            color: #999;
+        }
+
+        .features {
+            list-style: none;
+            margin: 20px 0;
+        }
+
+        .features li {
+            padding: 8px 0;
+            color: #555;
+            display: flex;
+            align-items: center;
+        }
+
+        .features li:before {
+            content: "✓";
+            color: #4CAF50;
+            font-weight: bold;
+            margin-right: 10px;
+            font-size: 18px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .info {
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #856404;
+        }
+
+        .test-mode {
+            background: #d4edda;
+            border-left: 4px solid #28a745;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .test-mode h3 {
+            color: #155724;
+            margin-bottom: 10px;
+        }
+
+        .test-credentials {
+            background: white;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 13px;
+            margin-top: 10px;
+        }
+
+        .test-credentials div {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Test Payment</h1>
+        <p class="subtitle">Test your license generation system</p>
+
+        <div class="test-mode">
+            <h3>🧪 Test Mode Active</h3>
+            <p style="color: #155724; margin-bottom: 10px;">Use these test card details:</p>
+            <div class="test-credentials">
+                <div><strong>Card Number:</strong> 4111 1111 1111 1111</div>
+                <div><strong>CVV:</strong> Any 3 digits (e.g., 123)</div>
+                <div><strong>Expiry:</strong> Any future date</div>
+                <div><strong>Name:</strong> Any name</div>
+            </div>
+        </div>
+
+        <div class="pricing-card">
+            <h2>Pro License</h2>
+            <div class="price">₹999 <small>/ year</small></div>
+            <ul class="features">
+                <li>1 Year Valid License</li>
+                <li>Activate on 1 Device</li>
+                <li>Email Support</li>
+                <li>Instant License Key</li>
+                <li>Auto-renewal Option</li>
+            </ul>
+        </div>
+
+        <div class="info">
+            <strong>ℹ️ What happens:</strong><br>
+            1. Payment processed via Razorpay<br>
+            2. License key auto-generated<br>
+            3. Saved to Supabase database<br>
+            4. Email sent with license key<br>
+            5. Ready to activate!
+        </div>
+
+        <form id="payment-form">
+            <div class="form-group">
+                <label for="name">Your Name</label>
+                <input type="text" id="name" required placeholder="John Doe">
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" required placeholder="john@example.com">
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Phone Number</label>
+                <input type="tel" id="phone" required placeholder="9876543210" pattern="[0-9]{10}">
+            </div>
+
+            <button type="submit">💳 Pay ₹999 & Get License</button>
+        </form>
+
+        <p style="text-align: center; margin-top: 20px; font-size: 12px; color: #999;">
+            🔒 Secured by Razorpay • Test Mode
+        </p>
+    </div>
+
+    <script>
+        // IMPORTANT: Replace these with your actual Razorpay keys
+        const RAZORPAY_KEY_ID = 'rzp_test_SEBjSuk1o3XfRS'; // Get from Razorpay Dashboard
+        const API_BASE = window.location.origin; // Your API base URL
+
+        document.getElementById('payment-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const phone = document.getElementById('phone').value;
+
+            try {
+                // First, create an order on your server
+                const orderResponse = await fetch(`${API_BASE}/api/razorpay/create-order`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        amount: 99900, // ₹999 in paise
+                        currency: 'INR',
+                        receipt: `receipt_${Date.now()}`,
+                        notes: {
+                            name: name,
+                            email: email,
+                            phone: phone
+                        }
+                    })
+                });
+
+                const orderData = await orderResponse.json();
+
+                if (!orderData.success) {
+                    throw new Error('Failed to create order');
+                }
+
+                // Now open Razorpay checkout with the order
+                const options = {
+                    key: orderData.key_id || RAZORPAY_KEY_ID,
+                    amount: orderData.amount,
+                    currency: orderData.currency,
+                    name: 'Your Company Name',
+                    description: 'Pro License - 1 Year',
+                    order_id: orderData.order_id,
+                    image: '', // Optional: Add your logo URL
+                    prefill: {
+                        name: name,
+                        email: email,
+                        contact: phone
+                    },
+                    theme: {
+                        color: '#667eea'
+                    },
+                    handler: function (response) {
+                        // Payment successful
+                        console.log('Payment successful:', response);
+                        
+                        // Show success message
+                        alert('✅ Payment Successful!\n\n' +
+                              'Payment ID: ' + response.razorpay_payment_id + '\n' +
+                              'Order ID: ' + response.razorpay_order_id + '\n\n' +
+                              'Your license key will be sent to your email shortly.\n' +
+                              'Check your Supabase database to see the generated license!');
+                        
+                        // Optionally redirect or update UI
+                        console.log('Order ID:', response.razorpay_order_id);
+                        console.log('Payment ID:', response.razorpay_payment_id);
+                        console.log('Signature:', response.razorpay_signature);
+                    },
+                    modal: {
+                        ondismiss: function() {
+                            console.log('Payment cancelled by user');
+                            alert('Payment was cancelled. No charges were made.');
+                        }
+                    }
+                };
+
+                const razorpay = new Razorpay(options);
+                
+                razorpay.on('payment.failed', function (response) {
+                    console.error('Payment failed:', response.error);
+                    alert('❌ Payment Failed!\n\n' +
+                          'Error: ' + response.error.description + '\n' +
+                          'Reason: ' + response.error.reason + '\n\n' +
+                          'Please try again or contact support.');
+                });
+
+                razorpay.open();
+
+            } catch (error) {
+                console.error('Error:', error);
+                alert('❌ Error: ' + error.message + '\n\n' +
+                      'Please check:\n' +
+                      '1. Your internet connection\n' +
+                      '2. Razorpay key is correct\n' +
+                      '3. Server is running');
+            }
+        });
+
+        // Check if Razorpay is loaded
+        if (typeof Razorpay === 'undefined') {
+            alert('⚠️ Razorpay SDK not loaded. Check your internet connection.');
+        }
+
+        // Display configuration reminder
+        window.addEventListener('load', function() {
+            if (RAZORPAY_KEY_ID === 'rzp_test_YOUR_KEY_HERE') {
+                console.warn('⚠️ IMPORTANT: Update RAZORPAY_KEY_ID with your actual test key!');
+                console.warn('Get it from: https://dashboard.razorpay.com/app/keys');
+            }
+        });
+    </script>
+</body>
+</html>
