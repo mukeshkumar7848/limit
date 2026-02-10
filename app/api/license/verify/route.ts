@@ -1,29 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+// CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+// Handle OPTIONS for CORS
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 export async function POST(request: NextRequest) {
   try {
-    // Initialize Supabase client inside the function
+    // Initialize Supabase client
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       console.error("Missing Supabase credentials");
       return NextResponse.json(
-        { error: "Server configuration error: Missing database credentials" },
-        { status: 500 }
+        { success: false, error: "Server configuration error" },
+        { status: 500, headers: corsHeaders }
       );
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const body = await request.json();
-    const { license_key, device_id } = body;
+    const { license_key, device_id, increment = false, product_id } = body;
+
+    console.log('🔍 License verify request:', { license_key, device_id, increment, product_id });
 
     if (!license_key) {
       return NextResponse.json(
-        { error: "License key is required" },
-        { status: 400 }
+        { success: false, message: "License key is required" },
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -35,111 +49,131 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error || !license) {
+      console.log('❌ License not found:', license_key);
       return NextResponse.json(
-        { error: "Invalid license key" },
-        { status: 404 }
+        { 
+          success: false, 
+          message: "License key not found",
+          uses: 0
+        },
+        { status: 404, headers: corsHeaders }
       );
     }
 
     // Check if license is expired
     if (new Date(license.expires_at) < new Date()) {
       return NextResponse.json(
-        { error: "License has expired", expires_at: license.expires_at },
-        { status: 403 }
+        { 
+          success: false, 
+          message: "License has expired",
+          purchase: {
+            refunded: false,
+            chargebacked: false,
+            expired: true
+          }
+        },
+        { status: 403, headers: corsHeaders }
       );
     }
 
-    // Check if license is active
-    if (license.status !== "active") {
+    // Check if license is revoked
+    if (license.status === "revoked") {
       return NextResponse.json(
-        { error: `License is ${license.status}` },
-        { status: 403 }
+        { 
+          success: false, 
+          message: "License has been revoked",
+          purchase: {
+            refunded: true,
+            chargebacked: false
+          }
+        },
+        { status: 403, headers: corsHeaders }
       );
     }
 
-    // If device_id is provided, activate the license
+    // If device_id is provided, handle device binding
     if (device_id) {
+      console.log('📱 Device binding requested:', device_id);
+      
       // Check if already activated on a different device
       if (license.device_id && license.device_id !== device_id) {
-        return NextResponse.json(
-          { 
-            error: "License already activated on another device",
-            device_id: license.device_id 
-          },
-          { status: 403 }
-        );
+        console.log('⚠️ License bound to different device:', license.device_id);
+        
+        // Allow taking over if increment is true (user confirmed)
+        if (!increment) {
+          return NextResponse.json(
+            { 
+              success: false, 
+              message: "License already activated on another device",
+              uses: license.activations || 0,
+              purchase: {
+                refunded: false,
+                chargebacked: false,
+                product_name: "Auto Captions Pro",
+                email: license.email || "",
+                sale_timestamp: license.created_at
+              }
+            },
+            { status: 200, headers: corsHeaders }
+          );
+        }
       }
 
-      // Check max activations
-      if (license.activations >= license.max_activations && !license.device_id) {
-        return NextResponse.json(
-          { error: "Maximum activation limit reached" },
-          { status: 403 }
-        );
-      }
-
-      // Activate license
-      const updates: any = {
-        activations: license.activations + 1,
-      };
-
-      if (!license.device_id) {
+      // Activate or re-bind license
+      const updates: any = {};
+      
+      if (license.device_id !== device_id || increment) {
         updates.device_id = device_id;
         updates.activated_at = new Date().toISOString();
+        if (increment) {
+          updates.activations = (license.activations || 0) + 1;
+        }
       }
 
-      const { data: updatedLicense, error: updateError } = await supabase
-        .from("licenses")
-        .update(updates)
-        .eq("license_key", license_key)
-        .select()
-        .single();
+      if (Object.keys(updates).length > 0) {
+        const { error: updateError } = await supabase
+          .from("licenses")
+          .update(updates)
+          .eq("license_key", license_key);
 
-      if (updateError) {
-        console.error("Update error:", updateError);
-        return NextResponse.json(
-          { error: "Failed to activate license" },
-          { status: 500 }
-        );
+        if (updateError) {
+          console.error("❌ Update error:", updateError);
+        } else {
+          console.log('✅ License activated/re-bound to device');
+        }
       }
-
-      return NextResponse.json(
-        {
-          success: true,
-          message: "License activated successfully",
-          license: {
-            license_key: updatedLicense.license_key,
-            status: updatedLicense.status,
-            expires_at: updatedLicense.expires_at,
-            activated_at: updatedLicense.activated_at,
-            activations: updatedLicense.activations,
-            max_activations: updatedLicense.max_activations,
-          },
-        },
-        { status: 200 }
-      );
     }
 
-    // Just verify without activation
+    // Return Gumroad-compatible format
     return NextResponse.json(
       {
-        valid: true,
-        license: {
+        success: true,
+        uses: license.activations || 0,
+        purchase: {
+          refunded: false,
+          chargebacked: false,
+          product_name: "Auto Captions Pro",
+          product_id: product_id || "auto-captions-pro",
+          email: license.email || "",
+          sale_timestamp: license.created_at,
           license_key: license.license_key,
-          status: license.status,
-          expires_at: license.expires_at,
-          activations: license.activations,
-          max_activations: license.max_activations,
-          is_activated: !!license.device_id,
-        },
+          subscription_id: null,
+          variants: "",
+          test: license.razorpay_payment_id?.startsWith('pay_test') || false,
+          custom_fields: {}
+        }
       },
-      { status: 200 }
+      { status: 200, headers: corsHeaders }
     );
   } catch (error) {
-    console.error("License verification error:", error);
+    console.error("❌ License verification error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      { 
+        success: false, 
+        message: "Internal server error",
+        error: error instanceof Error ? error.message : "Unknown error"
+      },
+      { status: 500, headers: corsHeaders }
     );
   }
 }
@@ -147,6 +181,6 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json(
     { error: "Method not allowed. Use POST to verify/activate license." },
-    { status: 405 }
+    { status: 405, headers: corsHeaders }
   );
 }
