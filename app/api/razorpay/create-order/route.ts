@@ -1,5 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// CORS headers
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+// Handle OPTIONS request for CORS
+export async function OPTIONS() {
+  return NextResponse.json({}, { headers: corsHeaders });
+}
+
 // This creates a Razorpay order before payment
 export async function POST(request: NextRequest) {
   try {
@@ -9,7 +21,7 @@ export async function POST(request: NextRequest) {
     if (!amount) {
       return NextResponse.json(
         { error: "Amount is required" },
-        { status: 400 }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -20,7 +32,7 @@ export async function POST(request: NextRequest) {
       console.error("Missing Razorpay credentials");
       return NextResponse.json(
         { error: "Razorpay not configured" },
-        { status: 500 }
+        { status: 500, headers: corsHeaders }
       );
     }
 
@@ -44,7 +56,7 @@ export async function POST(request: NextRequest) {
       console.error("Razorpay API error:", error);
       return NextResponse.json(
         { error: "Failed to create Razorpay order", details: error },
-        { status: razorpayResponse.status }
+        { status: razorpayResponse.status, headers: corsHeaders }
       );
     }
 
@@ -58,13 +70,16 @@ export async function POST(request: NextRequest) {
         currency: orderData.currency,
         key_id: keyId,
       },
-      { status: 200 }
+      { status: 200, headers: corsHeaders }
     );
   } catch (error) {
     console.error("Order creation error:", error);
     return NextResponse.json(
-      { error: "Failed to create order", details: error instanceof Error ? error.message : "Unknown error" },
-      { status: 500 }
+      { 
+        error: "Failed to create order", 
+        details: error instanceof Error ? error.message : "Unknown error" 
+      },
+      { status: 500, headers: corsHeaders }
     );
   }
 }
@@ -72,6 +87,6 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   return NextResponse.json(
     { error: "Method not allowed. Use POST to create an order." },
-    { status: 405 }
+    { status: 405, headers: corsHeaders }
   );
 }
