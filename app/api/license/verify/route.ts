@@ -60,8 +60,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if license is expired
-    if (new Date(license.expires_at) < new Date()) {
+    // Check if license is expired (skip if expires_at is null - lifetime license)
+    if (license.expires_at && new Date(license.expires_at) < new Date()) {
       return NextResponse.json(
         { 
           success: false, 
