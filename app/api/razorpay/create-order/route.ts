@@ -16,7 +16,7 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { amount, currency = "INR", receipt, notes } = body;
+    const { amount, currency = "INR", receipt, notes, email } = body;
 
     if (!amount) {
       return NextResponse.json(
@@ -36,6 +36,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Generate license key on server (so webhook can access it)
+    const generateLicenseKey = () => {
+      const segments = [];
+      for (let i = 0; i < 5; i++) {
+        const segment = Math.random().toString(36).substring(2, 7).toUpperCase();
+        segments.push(segment);
+      }
+      return `ACPRO-${segments.join('-')}`;
+    };
+    
+    const licenseKey = generateLicenseKey();
+    console.log('🔑 Generated license key:', licenseKey, 'for email:', email);
+
+    // Store license key and email in order notes
+    const orderNotes = {
+      ...notes,
+      license_key: licenseKey,
+      customer_email: email,
+      generated_at: new Date().toISOString()
+    };
+
     // Create order on Razorpay's servers
     const razorpayResponse = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
@@ -47,7 +68,7 @@ export async function POST(request: NextRequest) {
         amount: amount,
         currency: currency,
         receipt: receipt || `receipt_${Date.now()}`,
-        notes: notes || {},
+        notes: orderNotes,
       }),
     });
 
@@ -69,6 +90,7 @@ export async function POST(request: NextRequest) {
         amount: orderData.amount,
         currency: orderData.currency,
         key_id: keyId,
+        license_key: licenseKey, // Return license key to frontend
       },
       { status: 200, headers: corsHeaders }
     );

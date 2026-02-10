@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
         console.log("💳 Payment from Razorpay webhook:", paymentId);
         console.log("📧 Email from Razorpay:", email);
 
-        // Check if license already exists (frontend might have already created it)
+        // Check if license already exists
         const { data: existingLicense } = await supabase
           .from("licenses")
           .select("license_key")
@@ -106,20 +106,44 @@ export async function POST(request: NextRequest) {
 
         if (existingLicense) {
           console.log("✅ License already exists:", existingLicense.license_key);
-          console.log("⏭️ Skipping - frontend already processed this payment");
+          console.log("⏭️ Skipping - already processed");
           return NextResponse.json(
             { status: "success", message: "Already processed", license_key: existingLicense.license_key },
             { status: 200, headers: corsHeaders }
           );
         }
 
-        // If no existing license, we can't create one without the key from frontend
-        // This should not happen in normal flow since frontend always calls first
-        console.warn("⚠️ No existing license found for Razorpay webhook - this is unusual");
-        return NextResponse.json(
-          { status: "success", message: "Awaiting frontend data" },
-          { status: 200, headers: corsHeaders }
-        );
+        // Fetch order details to get license key from notes
+        const keyId = process.env.RAZORPAY_KEY_ID;
+        const keySecret = process.env.RAZORPAY_KEY_SECRET;
+        
+        if (keyId && keySecret && orderId) {
+          try {
+            const orderResponse = await fetch(`https://api.razorpay.com/v1/orders/${orderId}`, {
+              headers: {
+                Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}`,
+              },
+            });
+
+            if (orderResponse.ok) {
+              const orderData = await orderResponse.json();
+              licenseKey = orderData.notes?.license_key;
+              email = email || orderData.notes?.customer_email;
+              
+              console.log("📦 Retrieved from order notes:", { licenseKey, email });
+            }
+          } catch (orderError) {
+            console.error("⚠️ Failed to fetch order:", orderError);
+          }
+        }
+
+        if (!licenseKey || !email) {
+          console.warn("⚠️ Missing license key or email from order notes");
+          return NextResponse.json(
+            { status: "error", message: "Missing required data" },
+            { status: 400, headers: corsHeaders }
+          );
+        }
       }
     }
 
