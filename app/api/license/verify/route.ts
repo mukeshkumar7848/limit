@@ -158,7 +158,8 @@ export async function POST(request: NextRequest) {
           sale_timestamp: license.created_at,
           license_key: license.license_key,
           subscription_id: null,
-          variants: "",
+          variants: "Pro",  // ← Mark as Pro variant
+          price: 9900,      // ← Add price (₹99 in paisa, or use actual price)
           test: license.razorpay_payment_id?.startsWith('pay_test') || false,
           custom_fields: {}
         }
