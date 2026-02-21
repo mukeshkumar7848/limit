@@ -179,9 +179,79 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
-  return NextResponse.json(
-    { error: "Method not allowed. Use POST to verify/activate license." },
-    { status: 405, headers: corsHeaders }
-  );
+export async function GET(request: NextRequest) {
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json(
+        { success: false, error: "Server configuration error" },
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
+    const { searchParams } = new URL(request.url);
+    const license_key = searchParams.get("license_key");
+    const device_id   = searchParams.get("device_id") || undefined;
+
+    if (!license_key) {
+      return NextResponse.json(
+        { success: false, message: "license_key query param is required" },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
+    const { data: license, error } = await supabase
+      .from("licenses")
+      .select("*")
+      .eq("license_key", license_key)
+      .single();
+
+    if (error || !license) {
+      return NextResponse.json(
+        { valid: false, success: false, message: "License key not found" },
+        { status: 404, headers: corsHeaders }
+      );
+    }
+
+    const expired = license.expires_at && new Date(license.expires_at) < new Date();
+    const revoked = license.status === "revoked";
+
+    return NextResponse.json(
+      {
+        valid: !expired && !revoked,
+        success: !expired && !revoked,
+        license: {
+          license_key:  license.license_key,
+          email:        license.email,
+          status:       license.status,
+          activations:  license.activations,
+          max_activations: license.max_activations,
+          device_id:    license.device_id,
+          expires_at:   license.expires_at,
+          created_at:   license.created_at,
+        },
+        // Gumroad-compatible
+        uses: license.activations || 0,
+        purchase: {
+          refunded:     revoked,
+          chargebacked: false,
+          product_name: "Auto Captions Pro",
+          email:        license.email || "",
+          sale_timestamp: license.created_at,
+          license_key:  license.license_key,
+          device_id:    device_id || license.device_id,
+        }
+      },
+      { status: 200, headers: corsHeaders }
+    );
+  } catch (error) {
+    return NextResponse.json(
+      { success: false, error: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500, headers: corsHeaders }
+    );
+  }
 }
