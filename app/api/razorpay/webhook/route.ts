@@ -197,8 +197,14 @@ export async function POST(request: NextRequest) {
       // Send email
       if (resend && email) {
         try {
+          const fromEmail = process.env.FROM_EMAIL || "license@notifications.mukeshfx.com";
+          // Ensure proper "Name <email>" format
+          const fromFormatted = fromEmail.includes("<")
+            ? fromEmail
+            : `Auto Captions Pro <${fromEmail}>`;
+          console.log("📧 Sending email from:", fromFormatted, "to:", email);
           await resend.emails.send({
-            from: process.env.FROM_EMAIL || "Auto Captions Pro <noreply@notifications.mukeshfx.com>",
+            from: fromFormatted,
             to: email,
             subject: "🎉 Your Auto Captions Pro License Key",
             html: `

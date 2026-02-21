@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email & System Test Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        h1 { color: #667eea; text-align: center; margin-bottom: 5px; font-size: 1.8rem; }
+        .subtitle { text-align: center; color: #94a3b8; margin-bottom: 30px; font-size: 14px; }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1000px; margin: 0 auto; }
+        @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid #334155;
+        }
+        .card h2 {
+            font-size: 1rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .full-width { grid-column: 1 / -1; }
+
+        label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 6px; margin-top: 12px; }
+        input, select {
+            width: 100%;
+            padding: 10px 14px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus { border-color: #667eea; }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 14px;
+            transition: opacity 0.2s, transform 0.1s;
+        }
+        button:hover { opacity: 0.85; transform: translateY(-1px); }
+        button:active { transform: translateY(0); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        .btn-primary { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+        .btn-success { background: #22c55e; color: white; }
+        .btn-info    { background: #3b82f6; color: white; }
+        .btn-warn    { background: #f59e0b; color: white; }
+
+        .result {
+            margin-top: 14px;
+            padding: 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 260px;
+            overflow-y: auto;
+            display: none;
+        }
+        .result.success { background: #052e16; border: 1px solid #22c55e; color: #86efac; }
+        .result.error   { background: #2d0a0a; border: 1px solid #ef4444; color: #fca5a5; }
+        .result.info    { background: #0c1a2e; border: 1px solid #3b82f6; color: #93c5fd; }
+
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #334155;
+            font-size: 13px;
+        }
+        .status-row:last-child { border-bottom: none; }
+        .badge {
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .badge-ok   { background: #052e16; color: #22c55e; }
+        .badge-fail { background: #2d0a0a; color: #ef4444; }
+        .badge-pending { background: #1e293b; color: #94a3b8; }
+
+        .spinner {
+            display: inline-block;
+            width: 14px; height: 14px;
+            border: 2px solid #334155;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 6px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <h1>🛠 System Test Dashboard</h1>
+    <p class="subtitle">Test emails, license system, and API health</p>
+
+    <div class="grid">
+
+        <!-- Config Status -->
+        <div class="card">
+            <h2>⚙️ Config Status</h2>
+            <div id="config-status">
+                <div class="status-row"><span>Email (Resend)</span><span class="badge badge-pending" id="st-resend">Checking…</span></div>
+                <div class="status-row"><span>FROM_EMAIL</span><span class="badge badge-pending" id="st-from">Checking…</span></div>
+                <div class="status-row"><span>Environment</span><span class="badge badge-pending" id="st-env">Checking…</span></div>
+            </div>
+            <button class="btn-info" onclick="checkConfig()">🔄 Refresh Status</button>
+        </div>
+
+        <!-- Update Check -->
+        <div class="card">
+            <h2>🔄 Update Check API</h2>
+            <label>Client Version</label>
+            <input type="text" id="upd-version" value="1.0.0" placeholder="e.g. 1.0.0">
+            <label>Platform</label>
+            <select id="upd-platform">
+                <option value="windows">Windows</option>
+                <option value="mac">macOS</option>
+                <option value="after-effects">After Effects</option>
+                <option value="unknown">Unknown</option>
+            </select>
+            <label>License Key (optional)</label>
+            <input type="text" id="upd-license" placeholder="LIC-XXXX-XXXX">
+            <button class="btn-info" onclick="checkUpdate()">🔍 Check for Updates</button>
+            <div class="result info" id="upd-result"></div>
+        </div>
+
+        <!-- Send Test Email -->
+        <div class="card full-width">
+            <h2>📧 Send Test Email</h2>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div>
+                    <label>Recipient Email *</label>
+                    <input type="email" id="test-email" placeholder="you@example.com">
+                    <label>License Key (optional)</label>
+                    <input type="text" id="test-license" placeholder="LIC-XXXX-XXXX (leave blank for sample)">
+                </div>
+                <div>
+                    <label>ℹ️ This will send a real test email</label>
+                    <div style="background:#0f172a;border:1px solid #334155;border-radius:8px;padding:14px;margin-top:8px;font-size:12px;color:#94a3b8;line-height:1.8">
+                        • Uses your verified domain<br>
+                        • <code>FROM: license@notifications.mukeshfx.com</code><br>
+                        • Tests full email pipeline<br>
+                        • Shows debug info on success/fail
+                    </div>
+                </div>
+            </div>
+            <button class="btn-primary" id="send-btn" onclick="sendTestEmail()">📨 Send Test Email</button>
+            <div class="result" id="email-result"></div>
+        </div>
+
+        <!-- Resend License Email -->
+        <div class="card full-width">
+            <h2>🔁 Resend License Email (from Supabase)</h2>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+                <div>
+                    <label>License Key *</label>
+                    <input type="text" id="resend-license" placeholder="LIC-1770674220439-XXXXXXXX">
+                    <label>Override Email (optional)</label>
+                    <input type="email" id="resend-email-override" placeholder="Leave blank to use stored email">
+                </div>
+                <div style="padding-top:32px">
+                    <p style="font-size:12px;color:#94a3b8;line-height:1.8">
+                        This fetches the license from Supabase and resends the email to the stored address.<br><br>
+                        Useful when the webhook triggered but email failed.
+                    </p>
+                </div>
+            </div>
+            <button class="btn-success" onclick="resendLicenseEmail()">🔁 Resend License Email</button>
+            <div class="result" id="resend-result"></div>
+        </div>
+
+        <!-- API Health -->
+        <div class="card full-width">
+            <h2>❤️ API Health Check</h2>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px" id="health-grid">
+                <button class="btn-warn" style="margin-top:0" onclick="checkAllAPIs()">🩺 Check All APIs</button>
+            </div>
+            <div class="result info" id="health-result"></div>
+        </div>
+
+    </div>
+
+    <script>
+        const BASE = window.location.origin;
+
+        // ─── Config Check ───────────────────────────────────────────────────────────
+        async function checkConfig() {
+            ['st-resend','st-from','st-env'].forEach(id => {
+                document.getElementById(id).textContent = 'Checking…';
+                document.getElementById(id).className = 'badge badge-pending';
+            });
+            try {
+                const res = await fetch(`${BASE}/api/email/test`);
+                const data = await res.json();
+                setBadge('st-resend', data.resend_api_key_set, data.resend_api_key_set ? 'OK' : 'NOT SET');
+                setBadge('st-from',   data.from_email !== 'NOT SET', data.from_email !== 'NOT SET' ? data.from_email : 'NOT SET');
+                setBadge('st-env',    true, data.environment || 'Unknown');
+            } catch(e) {
+                ['st-resend','st-from','st-env'].forEach(id => setBadge(id, false, 'Error'));
+            }
+        }
+
+        function setBadge(id, ok, text) {
+            const el = document.getElementById(id);
+            el.textContent = text;
+            el.className = 'badge ' + (ok ? 'badge-ok' : 'badge-fail');
+        }
+
+        // ─── Update Check ────────────────────────────────────────────────────────────
+        async function checkUpdate() {
+            const version  = document.getElementById('upd-version').value || '1.0.0';
+            const platform = document.getElementById('upd-platform').value;
+            const license  = document.getElementById('upd-license').value;
+            const resultEl = document.getElementById('upd-result');
+
+            showLoading(resultEl, 'info');
+            try {
+                let url = `${BASE}/api/update/check?version=${encodeURIComponent(version)}&platform=${platform}`;
+                if (license) url += `&license_key=${encodeURIComponent(license)}`;
+                const res  = await fetch(url);
+                const data = await res.json();
+                showResult(resultEl, JSON.stringify(data, null, 2), 'info');
+            } catch(e) {
+                showResult(resultEl, '❌ Error: ' + e.message, 'error');
+            }
+        }
+
+        // ─── Send Test Email ─────────────────────────────────────────────────────────
+        async function sendTestEmail() {
+            const email   = document.getElementById('test-email').value.trim();
+            const license = document.getElementById('test-license').value.trim();
+            const resultEl = document.getElementById('email-result');
+            const btn = document.getElementById('send-btn');
+
+            if (!email) { alert('Please enter a recipient email!'); return; }
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Sending…';
+            showLoading(resultEl, 'info');
+
+            try {
+                const res  = await fetch(`${BASE}/api/email/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, license_key: license || undefined }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showResult(resultEl,
+                        `✅ Email Sent Successfully!\n\nEmail ID: ${data.email_id}\nTo: ${email}\n\n--- Debug Info ---\n${JSON.stringify(data.debug, null, 2)}`,
+                        'success');
+                } else {
+                    showResult(resultEl,
+                        `❌ Email Failed!\n\nError: ${data.error}\n\n--- Debug Info ---\n${JSON.stringify(data.debug, null, 2)}`,
+                        'error');
+                }
+            } catch(e) {
+                showResult(resultEl, '❌ Request failed: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '📨 Send Test Email';
+            }
+        }
+
+        // ─── Resend License Email ────────────────────────────────────────────────────
+        async function resendLicenseEmail() {
+            const license_key    = document.getElementById('resend-license').value.trim();
+            const override_email = document.getElementById('resend-email-override').value.trim();
+            const resultEl = document.getElementById('resend-result');
+
+            if (!license_key) { alert('Please enter a license key!'); return; }
+            showLoading(resultEl, 'info');
+
+            try {
+                const res  = await fetch(`${BASE}/api/license/verify`, {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+
+                // Fetch the license data first
+                const verifyRes = await fetch(`${BASE}/api/license/verify?license_key=${encodeURIComponent(license_key)}`);
+                const verifyData = await verifyRes.json();
+
+                if (!verifyData.valid) {
+                    showResult(resultEl, `❌ License not found: ${license_key}`, 'error');
+                    return;
+                }
+
+                const { license } = verifyData;
+                const toEmail = override_email || license.email;
+
+                if (!toEmail) {
+                    showResult(resultEl, '❌ No email found for this license. Please provide an override email.', 'error');
+                    return;
+                }
+
+                // Send the test email with license key
+                const emailRes = await fetch(`${BASE}/api/email/test`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: toEmail, license_key: license.license_key }),
+                });
+                const emailData = await emailRes.json();
+
+                if (emailData.success) {
+                    showResult(resultEl,
+                        `✅ License email resent!\n\nLicense: ${license.license_key}\nSent to: ${toEmail}\nEmail ID: ${emailData.email_id}`,
+                        'success');
+                } else {
+                    showResult(resultEl, `❌ Failed to send: ${emailData.error}\n\n${JSON.stringify(emailData.debug, null, 2)}`, 'error');
+                }
+            } catch(e) {
+                showResult(resultEl, '❌ Error: ' + e.message, 'error');
+            }
+        }
+
+        // ─── Health Check ─────────────────────────────────────────────────────────────
+        async function checkAllAPIs() {
+            const resultEl = document.getElementById('health-result');
+            showLoading(resultEl, 'info');
+
+            const endpoints = [
+                { name: 'Config API',        url: '/api/config',              method: 'GET' },
+                { name: 'Email Config',      url: '/api/email/test',          method: 'GET' },
+                { name: 'Update Check',      url: '/api/update/check?version=1.0.0', method: 'GET' },
+                { name: 'Advertisement API', url: '/api/advertisement',       method: 'GET' },
+                { name: 'License Verify',    url: '/api/license/verify?license_key=TEST', method: 'GET' },
+            ];
+
+            const results = [];
+            for (const ep of endpoints) {
+                try {
+                    const start = Date.now();
+                    const res = await fetch(BASE + ep.url, { method: ep.method });
+                    const ms = Date.now() - start;
+                    results.push(`${res.ok ? '✅' : '⚠️'} ${ep.name.padEnd(20)} ${res.status} (${ms}ms)`);
+                } catch(e) {
+                    results.push(`❌ ${ep.name.padEnd(20)} FAILED`);
+                }
+            }
+
+            showResult(resultEl, results.join('\n'), 'info');
+        }
+
+        // ─── Helpers ──────────────────────────────────────────────────────────────────
+        function showLoading(el, type) {
+            el.style.display = 'block';
+            el.className = 'result ' + type;
+            el.innerHTML = '<span class="spinner"></span> Loading…';
+        }
+        function showResult(el, text, type) {
+            el.style.display = 'block';
+            el.className = 'result ' + type;
+            el.textContent = text;
+        }
+
+        // Auto-check config on load
+        checkConfig();
+    </script>
+</body>
+</html>
