@@ -115,8 +115,14 @@ export async function POST(request: NextRequest) {
     const paymentId   = paymentEntity.id || paymentEntity.razorpay_payment_id;
     const orderId     = paymentEntity.order_id || paymentEntity.razorpay_order_id || "";
     const amountPaise = Number(paymentEntity.amount) || 0;
-    let   email       = (paymentEntity.email || "").trim();
-    const phone       = paymentEntity.contact || "";
+    // Razorpay sometimes sends email at top level, or inside notes
+    let   email       = (
+      paymentEntity.email ||
+      paymentEntity.notes?.customer_email ||
+      paymentEntity.notes?.email ||
+      ""
+    ).trim();
+    const phone       = paymentEntity.contact || paymentEntity.notes?.phone || "";
 
     console.log("💳 paymentId:", paymentId);
     console.log("�� orderId  :", orderId);

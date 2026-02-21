@@ -248,6 +248,7 @@
                     body: JSON.stringify({
                         amount: 99900, // ₹999 in paise
                         currency: 'INR',
+                        email: email,   // top-level so create-order can embed in notes
                         receipt: `receipt_${Date.now()}`,
                         notes: {
                             name: name,

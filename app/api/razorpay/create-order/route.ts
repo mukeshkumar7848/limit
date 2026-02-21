@@ -16,7 +16,10 @@ export async function OPTIONS() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { amount, currency = "INR", receipt, notes, email } = body;
+    const { amount, currency = "INR", receipt, notes } = body;
+
+    // Accept email from top-level OR from notes (belt-and-suspenders)
+    const email: string = (body.email || notes?.email || "").trim();
 
     if (!amount) {
       return NextResponse.json(
